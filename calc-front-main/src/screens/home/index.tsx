@@ -148,7 +148,7 @@ export default function Home() {
         if (canvas) {
             const response = await axios({
                 method: 'post',
-                url: `http://localhost:8900/calculate`,
+                url: `https://ai-powered-calculator-1.onrender.com/calculate`,
                 data: {
                     image: canvas.toDataURL('image/png'),
                     dict_of_vars: dictOfVars

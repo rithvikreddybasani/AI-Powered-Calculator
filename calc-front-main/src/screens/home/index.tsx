@@ -1,17 +1,16 @@
 import { ColorSwatch, Group } from '@mantine/core';
 import { Button } from '@/components/ui/button';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import axios from 'axios';
 import Draggable from 'react-draggable';
 import { SWATCHES } from '@/constants';
-// import { LazyBrush } from 'lazy-brush';
 
 interface GeneratedResult {
     expression: string;
     answer: string;
 }
 
-interface Response {
+interface ResponseData {
     expr: string;
     result: string;
     assign: boolean;
@@ -22,16 +21,23 @@ export default function Home() {
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState('rgb(255, 255, 255)');
     const [reset, setReset] = useState(false);
-    const [dictOfVars, setDictOfVars] = useState({});
+    const [dictOfVars, setDictOfVars] = useState<Record<string, string>>({});
     const [result, setResult] = useState<GeneratedResult>();
     const [latexPosition, setLatexPosition] = useState({ x: 10, y: 200 });
     const [latexExpression, setLatexExpression] = useState<Array<string>>([]);
 
-    // const lazyBrush = new LazyBrush({
-    //     radius: 10,
-    //     enabled: true,
-    //     initialPoint: { x: 0, y: 0 },
-    // });
+    const renderLatexToCanvas = useCallback((expression: string, answer: string) => {
+        const latex = `\\(\\LARGE{${expression} = ${answer}}\\)`;
+        setLatexExpression(prev => [...prev, latex]);
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    }, []);
 
     useEffect(() => {
         if (latexExpression.length > 0 && window.MathJax) {
@@ -45,7 +51,7 @@ export default function Home() {
         if (result) {
             renderLatexToCanvas(result.expression, result.answer);
         }
-    }, [result]);
+    }, [result, renderLatexToCanvas]);
 
     useEffect(() => {
         if (reset) {
@@ -59,7 +65,7 @@ export default function Home() {
 
     useEffect(() => {
         const canvas = canvasRef.current;
-    
+
         if (canvas) {
             const ctx = canvas.getContext('2d');
             if (ctx) {
@@ -69,7 +75,7 @@ export default function Home() {
                 ctx.lineWidth = 3;
             }
         }
-        
+
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_CHTML';
         script.async = true;
@@ -77,7 +83,7 @@ export default function Home() {
 
         script.onload = () => {
             window.MathJax.Hub.Config({
-                tex2jax: {inlineMath: [['$', '$'], ['\\(', '\\)']]},
+                tex2jax: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
             });
         };
 
@@ -86,20 +92,6 @@ export default function Home() {
         };
 
     }, []);
-
-    const renderLatexToCanvas = (expression: string, answer: string) => {
-        const latex = `\\(\\LARGE{${expression} = ${answer}}\\)`;
-        setLatexExpression([...latexExpression, latex]);
-
-        // Clear the main canvas
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        }
-    };
 
     const resetCanvas = () => {
         const canvas = canvasRef.current;
@@ -111,21 +103,20 @@ export default function Home() {
         }
     };
 
-    const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (canvas) {
             canvas.style.background = 'black';
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                const { offsetX, offsetY } = e.nativeEvent as any;
                 ctx.beginPath();
-                ctx.moveTo(offsetX, offsetY);
+                ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
                 setIsDrawing(true);
             }
         }
     };
 
-    const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (!isDrawing) {
             return;
         }
@@ -133,9 +124,8 @@ export default function Home() {
         if (canvas) {
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                const { offsetX, offsetY } = e.nativeEvent as any;
                 ctx.strokeStyle = color;
-                ctx.lineTo(offsetX, offsetY);
+                ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
                 ctx.stroke();
             }
         }
@@ -147,25 +137,21 @@ export default function Home() {
 
     const runRoute = async () => {
         const canvas = canvasRef.current;
-    
+
         if (canvas) {
-            const response = await axios({
-                method: 'post',
-                url: `https://ai-powered-calculator-1.onrender.com/calculate`,
-                data: {
-                    image: canvas.toDataURL('image/png'),
-                    dict_of_vars: dictOfVars
-                }
+            const response = await axios.post('https://ai-powered-calculator-1.onrender.com/calculate', {
+                image: canvas.toDataURL('image/png'),
+                dict_of_vars: dictOfVars
             });
 
-            const resp = await response.data;
+            const resp: { data: ResponseData[] } = response.data;
             console.log('Response', resp);
-            resp.data.forEach((data: Response) => {
+            resp.data.forEach((data) => {
                 if (data.assign === true) {
-                    setDictOfVars({
-                        ...dictOfVars,
+                    setDictOfVars(prev => ({
+                        ...prev,
                         [data.expr]: data.result
-                    });
+                    }));
                 }
             });
 
@@ -189,7 +175,7 @@ export default function Home() {
             const centerY = (minY + maxY) / 2;
 
             setLatexPosition({ x: centerX, y: centerY });
-            resp.data.forEach((data: Response) => {
+            resp.data.forEach((data) => {
                 setTimeout(() => {
                     setResult({
                         expression: data.expr,
@@ -206,7 +192,7 @@ export default function Home() {
                 <Button
                     onClick={() => setReset(true)}
                     className='z-20 bg-black text-white'
-                    variant='default' 
+                    variant='default'
                     color='black'
                 >
                     Reset
@@ -233,9 +219,6 @@ export default function Home() {
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
                 onMouseOut={stopDrawing}
-                onTouchStart={startDrawing}
-                onTouchMove={draw}
-                onTouchEnd={stopDrawing}
             />
 
             {latexExpression && latexExpression.map((latex, index) => (

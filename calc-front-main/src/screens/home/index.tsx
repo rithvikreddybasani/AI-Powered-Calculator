@@ -103,20 +103,24 @@ export default function Home() {
         }
     };
 
-    const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (canvas) {
             canvas.style.background = 'black';
             const ctx = canvas.getContext('2d');
             if (ctx) {
+                const { offsetX, offsetY } = e.type === 'touchstart'
+                    ? { offsetX: (e as React.TouchEvent<HTMLCanvasElement>).touches[0].clientX - canvas.getBoundingClientRect().left, offsetY: (e as React.TouchEvent<HTMLCanvasElement>).touches[0].clientY - canvas.getBoundingClientRect().top }
+                    : e.nativeEvent;
+                
                 ctx.beginPath();
-                ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+                ctx.moveTo(offsetX, offsetY);
                 setIsDrawing(true);
             }
         }
     };
 
-    const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
         if (!isDrawing) {
             return;
         }
@@ -124,8 +128,12 @@ export default function Home() {
         if (canvas) {
             const ctx = canvas.getContext('2d');
             if (ctx) {
+                const { offsetX, offsetY } = e.type === 'touchmove'
+                    ? { offsetX: (e as React.TouchEvent<HTMLCanvasElement>).touches[0].clientX - canvas.getBoundingClientRect().left, offsetY: (e as React.TouchEvent<HTMLCanvasElement>).touches[0].clientY - canvas.getBoundingClientRect().top }
+                    : e.nativeEvent;
+
                 ctx.strokeStyle = color;
-                ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+                ctx.lineTo(offsetX, offsetY);
                 ctx.stroke();
             }
         }
@@ -219,6 +227,10 @@ export default function Home() {
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
                 onMouseOut={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+                onTouchCancel={stopDrawing}
             />
 
             {latexExpression && latexExpression.map((latex, index) => (
@@ -228,7 +240,7 @@ export default function Home() {
                     onStop={(e, data) => setLatexPosition({ x: data.x, y: data.y })}
                 >
                     <div className="absolute p-2 text-white rounded shadow-md">
-                        <div className="latex-content">{latex}</div>
+                        <div className="latex-content" dangerouslySetInnerHTML={{ __html: latex }} />
                     </div>
                 </Draggable>
             ))}
